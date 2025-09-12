@@ -1,0 +1,147 @@
+import { Router } from "express";
+import { listResource, getById } from "./repo";
+
+const r = Router();
+
+/**
+ * @openapi
+ * /v1/{res}/items:
+ *   get:
+ *     tags:
+ *       - Resources
+ *     summary: Lista items desde una vista permitida
+ *     parameters:
+ *       - in: path
+ *         name: res
+ *         required: true
+ *         description: Recurso configurado (ej. productos, inventarios)
+ *         schema:
+ *           type: string
+ *           example: productos
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: size
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 200
+ *           default: 50
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           example: Nombre
+ *       - in: query
+ *         name: dir
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: asc
+ *       - in: query
+ *         name: filter
+ *         style: deepObject
+ *         explode: true
+ *         description: Filtros por columna whitelisteada.
+ *         schema:
+ *           type: object
+ *           additionalProperties:
+ *             type: string
+ *         examples:
+ *           porNombre:
+ *             value: { Nombre: "foco" }
+ *           multiple:
+ *             value: { Codigo: "000162", Almacen: "GDL" }
+ *     responses:
+ *       "200": { description: OK }
+ *       "400": { description: Parámetros inválidos }
+ *       "401": { description: Falta API key }
+ *       "403": { description: API key inválida }
+ *       "404": { description: Recurso no encontrado }
+ */
+r.get("/:res/items", async (req, res) => {
+  try {
+    const filters: Record<string, string> = {};
+
+    // Soporta deepObject: filter[Col]=val
+    const q: any = req.query;
+    if (q.filter && typeof q.filter === "object") {
+      for (const [k, v] of Object.entries(q.filter)) {
+        const val = String(v ?? "").trim();
+        if (val) filters[k] = val;
+      }
+    }
+    // Soporta legado: filter[Col]=val como claves planas
+    for (const [k, v] of Object.entries(req.query)) {
+      if (k.startsWith("filter[") && k.endsWith("]")) {
+        const val = String(v ?? "").trim();
+        if (val) filters[k.slice(7, -1)] = val;
+      }
+    }
+
+    const data = await listResource(String(req.params.res), {
+      page: Number(req.query.page ?? 1),
+      size: Number(req.query.size ?? 50),
+      sort: String(req.query.sort ?? "1"),
+      dir: (String(req.query.dir ?? "asc") as "asc" | "desc"),
+      filters,
+    });
+    res.json({ data });
+  } catch (e: any) {
+    const msg =
+      e.message === "resource_not_found"
+        ? 404
+        : e.message.startsWith("invalid_")
+        ? 400
+        : 500;
+    res.status(msg).json({ error: e.message });
+  }
+});
+
+/**
+ * @openapi
+ * /v1/{res}/items/{id}:
+ *   get:
+ *     tags:
+ *       - Resources
+ *     summary: Obtiene un item por ID
+ *     parameters:
+ *       - in: path
+ *         name: res
+ *         required: true
+ *         schema: { type: string, example: productos }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, example: "166401" }
+ *       - in: query
+ *         name: idCol
+ *         description: Columna ID a usar. Por defecto la pk configurada del recurso.
+ *         schema: { type: string, example: ProductId }
+ *     responses:
+ *       "200": { description: OK }
+ *       "400": { description: Parámetros inválidos }
+ *       "401": { description: Falta API key }
+ *       "403": { description: API key inválida }
+ *       "404": { description: No encontrado }
+ */
+r.get("/:res/items/:id", async (req, res) => {
+  try {
+    const item = await getById(
+      String(req.params.res),
+      String(req.params.id),
+      req.query.idCol as string | undefined
+    );
+    if (!item) return res.status(404).json({ error: "not_found" });
+    res.json({ data: { item } });
+  } catch (e: any) {
+    const msg = e.message.startsWith("invalid_") ? 400 : 500;
+    res.status(msg).json({ error: e.message });
+  }
+});
+
+export default r;
