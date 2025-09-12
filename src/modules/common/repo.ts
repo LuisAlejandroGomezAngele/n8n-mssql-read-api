@@ -84,3 +84,49 @@ export async function getById(resource: string, id: string, idCol?: string) {
   if (!rows.length) return null;
   return rows[0];
 }
+
+export async function getOrderByCustomerAndBill(
+  resource: string,
+  customerCode: string,
+  billCode: string
+) {
+  const cfg = ensureResource(resource);
+
+  const viewCandidates = [
+    `${cfg.view}`
+  ];
+
+  for (const v of viewCandidates) {
+    try {
+      const rows = await sequelize.query(
+        `SELECT * FROM ${quoteId(v)} WHERE customerCode = :cust AND billCode = :bill`,
+        { replacements: { cust: customerCode, bill: billCode }, type: QueryTypes.SELECT }
+      );
+      if (rows.length) return rows[0];
+    } catch (e) {
+      // ignorar y probar siguiente candidata
+    }
+  }
+  // Si ninguna candidata funcionó, lanzar recurso no encontrado para que la ruta devuelva 404
+  throw new Error("resource_not_found");
+}
+
+export async function listOrdersByCustomer(resource: string, customerCode: string) {
+  const cfg = ensureResource(resource);
+  const viewCandidates = [
+    `${cfg.view}`,
+  ];
+
+  for (const v of viewCandidates) {
+    try {
+      const rows = await sequelize.query(
+        `SELECT * FROM ${quoteId(v)} WHERE customerCode = :cust ORDER BY CreateDate DESC`,
+        { replacements: { cust: customerCode }, type: QueryTypes.SELECT }
+      );
+      return rows;
+    } catch (e) {
+      // seguir con la siguiente candidata
+    }
+  }
+  throw new Error("resource_not_found");
+}

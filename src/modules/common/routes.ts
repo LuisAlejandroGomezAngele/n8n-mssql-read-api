@@ -3,6 +3,8 @@ import { listResource, getById } from "./repo";
 
 const r = Router();
 
+import { getOrderByCustomerAndBill, listOrdersByCustomer } from "./repo";
+
 /**
  * @openapi
  * /v1/{res}/items:
@@ -145,3 +147,124 @@ r.get("/:res/items/:id", async (req, res) => {
 });
 
 export default r;
+
+/**
+ * Rutas de órdenes
+ */
+/**
+ * @openapi
+ * /v1/{res}/orders:
+ *   get:
+ *     tags:
+ *       - Orders
+ *     summary: Obtiene órdenes de un cliente o una orden específica
+ *     parameters:
+ *       - in: path
+ *         name: res
+ *         required: true
+ *         description: Recurso configurado (ej. customers)
+ *         schema:
+ *           type: string
+ *           example: customers
+ *       - in: query
+ *         name: customercode
+ *         required: true
+ *         description: Código del cliente
+ *         schema:
+ *           type: string
+ *           example: ABC123
+ *       - in: query
+ *         name: billcode
+ *         required: false
+ *         description: Código de la factura/orden (opcional). Si se provee devuelve una sola orden.
+ *         schema:
+ *           type: string
+ *           example: BILL001
+ *     responses:
+ *       "200":
+ *         description: OK
+ *       "400":
+ *         description: Parámetros inválidos
+ *       "401":
+ *         description: Falta API key
+ *       "403":
+ *         description: API key inválida
+ *       "404":
+ *         description: Recurso o orden no encontrado
+ */
+/**
+ * GET /v1/{res}/orders?customercode=...&billcode=...
+ * - `customercode` requerido
+ * - `billcode` opcional: si se envia, devuelve la orden específica
+ */
+r.get("/:res/orders", async (req, res) => {
+  try {
+    const customerCode = String(req.query.customercode ?? "").trim();
+    const billCode = req.query.billcode ? String(req.query.billcode).trim() : undefined;
+    if (!customerCode) return res.status(400).json({ error: "invalid_customercode" });
+
+    if (billCode) {
+      const order = await getOrderByCustomerAndBill(String(req.params.res), customerCode, billCode);
+      if (!order) return res.status(404).json({ error: "not_found" });
+      return res.json({ data: { order } });
+    }
+
+    const orders = await listOrdersByCustomer(String(req.params.res), customerCode);
+    return res.json({ data: { orders } });
+  } catch (e: any) {
+    const msg = e.message === "resource_not_found" ? 404 : e.message.startsWith("invalid_") ? 400 : 500;
+    res.status(msg).json({ error: e.message });
+  }
+});
+
+/**
+ * Compat: GET /v1/{res}/orders/{billcode}?customercode=...
+ */
+/**
+ * @openapi
+ * /v1/{res}/orders/{billcode}:
+ *   get:
+ *     tags:
+ *       - Orders
+ *     summary: Obtiene una orden específica por billcode y customercode
+ *     parameters:
+ *       - in: path
+ *         name: res
+ *         required: true
+ *         schema: { type: string, example: customers }
+ *       - in: path
+ *         name: billcode
+ *         required: true
+ *         description: Código de la factura/orden
+ *         schema:
+ *           type: string
+ *           example: BILL001
+ *       - in: query
+ *         name: customercode
+ *         required: true
+ *         description: Código del cliente
+ *         schema:
+ *           type: string
+ *           example: ABC123
+ *     responses:
+ *       "200": { description: OK }
+ *       "400": { description: Parámetros inválidos }
+ *       "401": { description: Falta API key }
+ *       "403": { description: API key inválida }
+ *       "404": { description: No encontrado }
+ */
+r.get("/:res/orders/:billcode", async (req, res) => {
+  try {
+    const customerCode = String(req.query.customercode ?? "").trim();
+    const billCode = String(req.params.billcode ?? "").trim();
+    if (!customerCode) return res.status(400).json({ error: "invalid_customercode" });
+    if (!billCode) return res.status(400).json({ error: "invalid_billcode" });
+
+    const order = await getOrderByCustomerAndBill(String(req.params.res), customerCode, billCode);
+    if (!order) return res.status(404).json({ error: "not_found" });
+    res.json({ data: { order } });
+  } catch (e: any) {
+    const msg = e.message === "resource_not_found" ? 404 : e.message.startsWith("invalid_") ? 400 : 500;
+    res.status(msg).json({ error: e.message });
+  }
+});
