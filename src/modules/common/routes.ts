@@ -257,8 +257,8 @@ r.get("/:res/orders/:billcode", async (req, res) => {
   try {
     const customerCode = String(req.query.customercode ?? "").trim();
     const billCode = String(req.params.billcode ?? "").trim();
-    if (!customerCode) return res.status(400).json({ error: "invalid_customercode" });
-    if (!billCode) return res.status(400).json({ error: "invalid_billcode" });
+    if (!customerCode) return res.status(400).json({ error: "Codigo de cliente es requerido" });
+    if (!billCode) return res.status(400).json({ error: "Codigo de orden es requerido" });
 
     const order = await getOrderByCustomerAndBill(String(req.params.res), customerCode, billCode);
     if (!order) return res.status(404).json({ error: "not_found" });

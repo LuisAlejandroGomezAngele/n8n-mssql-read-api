@@ -99,7 +99,7 @@ export async function getOrderByCustomerAndBill(
   for (const v of viewCandidates) {
     try {
       const rows = await sequelize.query(
-        `SELECT * FROM ${quoteId(v)} WHERE customerCode = :cust AND billCode = :bill`,
+        `SELECT * FROM ${quoteId(v)} WHERE customerCode = :cust AND BillCode = :bill`,
         { replacements: { cust: customerCode, bill: billCode }, type: QueryTypes.SELECT }
       );
       if (rows.length) return rows[0];
