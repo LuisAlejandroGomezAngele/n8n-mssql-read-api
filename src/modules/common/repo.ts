@@ -40,7 +40,7 @@ export async function listResource(
 ) {
   const cfg = ensureResource(resource);
   const page = Math.max(opts.page ?? 1, 1);
-  const size = Math.min(Math.max(opts.size ?? 50, 1), 200);
+  const size = Math.max(Math.floor(Number(opts.size ?? 50)), 1);
   const off = (page - 1) * size;
   const sortCol = ensureSort(cfg, opts.sort ?? "1");
   const dir = (opts.dir ?? "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
