@@ -10,7 +10,7 @@ export const RESOURCES: Record<string, ResourceCfg> = {
     view: "view_ProductsPricesRegions",
     pk: "productId",
     allowSort: ["productId", "CodigoProducto", "Especificacion"],
-    allowFilter: ["productId", "CodigoProducto", "Especificacion"],
+    allowFilter: ["productId", "CodigoProducto", "Especificacion", "Descripcion"],
   },
   inventories: {
     view: "vw_inventories",

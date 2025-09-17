@@ -45,6 +45,13 @@ import { getOrderByCustomerAndBill, listOrdersByCustomer } from "./repo";
  *           enum: [asc, desc]
  *           default: asc
  *       - in: query
+ *         name: match
+ *         description: Modo de coincidencia para filtros. contains = %v%, starts = v%, ends = %v, exact = =v
+ *         schema:
+ *           type: string
+ *           enum: [contains, starts, ends, exact]
+ *           default: contains
+ *       - in: query
  *         name: filter
  *         style: deepObject
  *         explode: true
@@ -54,10 +61,14 @@ import { getOrderByCustomerAndBill, listOrdersByCustomer } from "./repo";
  *           additionalProperties:
  *             type: string
  *         examples:
- *           porNombre:
+ *           contiene:
  *             value: { Nombre: "foco" }
- *           multiple:
- *             value: { Codigo: "000162", Almacen: "GDL" }
+ *           empieza:
+ *             value: { Codigo: "0001" }
+ *           termina:
+ *             value: { Nombre: "LED" }
+ *           exacto:
+ *             value: { Codigo: "ABC123" }
  *     responses:
  *       "200": { description: OK }
  *       "400": { description: Parámetros inválidos }
@@ -65,11 +76,10 @@ import { getOrderByCustomerAndBill, listOrdersByCustomer } from "./repo";
  *       "403": { description: API key inválida }
  *       "404": { description: Recurso no encontrado }
  */
+
 r.get("/:res/items", async (req, res) => {
   try {
     const filters: Record<string, string> = {};
-
-    // Soporta deepObject: filter[Col]=val
     const q: any = req.query;
     if (q.filter && typeof q.filter === "object") {
       for (const [k, v] of Object.entries(q.filter)) {
@@ -77,7 +87,6 @@ r.get("/:res/items", async (req, res) => {
         if (val) filters[k] = val;
       }
     }
-    // Soporta legado: filter[Col]=val como claves planas
     for (const [k, v] of Object.entries(req.query)) {
       if (k.startsWith("filter[") && k.endsWith("]")) {
         const val = String(v ?? "").trim();
@@ -91,18 +100,16 @@ r.get("/:res/items", async (req, res) => {
       sort: String(req.query.sort ?? "1"),
       dir: (String(req.query.dir ?? "asc") as "asc" | "desc"),
       filters,
+      match: String(req.query.match ?? "contains") as any, // <— NUEVO
     });
     res.json({ data });
-  } catch (e: any) {
-    const msg =
-      e.message === "resource_not_found"
-        ? 404
-        : e.message.startsWith("invalid_")
-        ? 400
-        : 500;
+  } catch (e:any) {
+    const msg = e.message === "resource_not_found" ? 404
+            : e.message.startsWith("invalid_") ? 400 : 500;
     res.status(msg).json({ error: e.message });
   }
 });
+
 
 /**
  * @openapi

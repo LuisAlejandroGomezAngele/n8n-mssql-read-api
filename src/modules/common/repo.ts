@@ -36,6 +36,7 @@ export async function listResource(
     sort?: string;
     dir?: "asc" | "desc";
     filters?: Record<string, string>;
+    match?: "contains" | "starts" | "ends" | "exact";
   }
 ) {
   const cfg = ensureResource(resource);
@@ -45,15 +46,29 @@ export async function listResource(
   const sortCol = ensureSort(cfg, opts.sort ?? "1");
   const dir = (opts.dir ?? "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
   const filters = ensureFilter(cfg, { ...(opts.filters ?? {}) });
+  const match = (opts.match ?? "contains") as "contains" | "starts" | "ends" | "exact";
+
+  const escLike = (s: string) => s.replace(/[\\%_]/g, m => "\\" + m);
 
   const whereParts: string[] = [];
   const repl: Record<string, any> = {};
   let i = 0;
-  for (const [col, val] of Object.entries(filters)) {
+  for (const [col, rawVal] of Object.entries(filters)) {
     i++;
-    whereParts.push(`${quoteId(col)} LIKE :p${i}`);
-    repl[`p${i}`] = `%${val}%`;
+    if (match === "exact") {
+      whereParts.push(`${quoteId(col)} = :p${i}`);
+      repl[`p${i}`] = rawVal;
+    } else {
+      const val = escLike(rawVal);
+      const pat =
+        match === "starts" ? `${val}%` :
+        match === "ends"   ? `%${val}` :
+                             `%${val}%`; // contains
+      whereParts.push(`${quoteId(col)} LIKE :p${i} ESCAPE '\\'`);
+      repl[`p${i}`] = pat;
+    }
   }
+
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
   const orderSql = sortCol ? `ORDER BY ${quoteId(sortCol)} ${dir}` : "";
   const view = cfg.view;
