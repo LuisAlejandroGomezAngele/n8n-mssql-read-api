@@ -4,6 +4,7 @@ import { listResource, getById } from "./repo";
 const r = Router();
 
 import { getOrderByCustomerAndBill, listOrdersByCustomer } from "./repo";
+import larkRouter from "../lark/controller";
 
 /**
  * @openapi
@@ -275,3 +276,6 @@ r.get("/:res/orders/:billcode", async (req, res) => {
     res.status(msg).json({ error: e.message });
   }
 });
+
+// Lark proxy routes
+r.use("/lark", larkRouter);
