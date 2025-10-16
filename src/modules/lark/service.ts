@@ -60,7 +60,6 @@ export async function getLarkFields(opts: LarkFieldsOpts) {
   const base = env.larkBase ?? "https://open.larksuite.com";
   const token = opts.token ?? await getAppToken();
   if (!token) throw new Error("missing_lark_token");
-    console.log('Lark Token:', token);
   const url = `${base}/open-apis/bitable/v1/apps/${encodeURIComponent(opts.appId)}/tables/${encodeURIComponent(opts.tableId)}/fields`;
   const params: Record<string, any> = { page_size: opts.pageSize ?? 20 };
   if (opts.viewId) params.view_id = opts.viewId;
@@ -69,6 +68,49 @@ export async function getLarkFields(opts: LarkFieldsOpts) {
     params,
     headers: { Authorization: `Bearer ${token}` },
     timeout: 10000,
+  });
+
+  return resp.data;
+}
+
+export type BatchCreateOpts = {
+  appId: string;
+  tableId: string;
+  records: any[];
+  token?: string;
+};
+
+export async function batchCreateRecords(opts: BatchCreateOpts) {
+  const base = env.larkBase ?? "https://open.larksuite.com";
+  const token = opts.token ?? await getAppToken();
+  if (!token) throw new Error("missing_lark_token");
+
+  const url = `${base}/open-apis/bitable/v1/apps/${encodeURIComponent(opts.appId)}/tables/${encodeURIComponent(opts.tableId)}/records/batch_create`;
+
+  const resp = await axios.post(url, { records: opts.records }, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    timeout: 15000,
+  });
+
+  return resp.data;
+}
+
+export type BatchUpdateOpts = {
+  appId: string;
+  tableId: string;
+  records: any[]; // each record must include record_id and fields
+};
+
+export async function batchUpdateRecords(opts: BatchUpdateOpts) {
+  const base = env.larkBase ?? "https://open.larksuite.com";
+  const token = await getAppToken();
+  if (!token) throw new Error("missing_lark_token");
+
+  const url = `${base}/open-apis/bitable/v1/apps/${encodeURIComponent(opts.appId)}/tables/${encodeURIComponent(opts.tableId)}/records/batch_update`;
+
+  const resp = await axios.post(url, { records: opts.records }, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    timeout: 15000,
   });
 
   return resp.data;
