@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getLarkFields, batchCreateRecords, batchUpdateRecords } from "./service";
+import { getLarkFields, batchCreateRecords, batchUpdateRecords, searchRecords } from "./service";
 
 const r = Router();
 
@@ -89,6 +89,38 @@ r.post(["/records/update", "/records/batch_update"], async (req, res) => {
     }
 
     const data = await batchUpdateRecords({ appId, tableId, records });
+    res.json({ data });
+  } catch (e: any) {
+    if (e.message === "missing_lark_token") return res.status(500).json({ error: e.message });
+    const status = e.response?.status ?? 500;
+    const body = e.response?.data ?? { message: e.message };
+    res.status(status).json({ error: body });
+  }
+});
+
+/**
+ * POST /v1/lark/records/search
+ * Body: { appId, tableId, pageSize, body }
+ */
+r.post("/records/search", async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const appId = String(body.appId ?? "").trim();
+    const tableId = String(body.tableId ?? "").trim();
+    const pageSize = body.pageSize ? Number(body.pageSize) : undefined;
+    const payload = body.body ?? body.payload ?? null;
+    if (!payload) {
+      return res.status(400).json({ error: "invalid_payload" });
+    }
+    if (!appId) {
+      return res.status(400).json({ error: "invalid_appId" });
+    }
+    if (!tableId) {
+      return res.status(400).json({ error: "invalid_tableId" });
+    }
+
+
+    const data = await searchRecords({ appId, tableId, pageSize, body: payload });
     res.json({ data });
   } catch (e: any) {
     if (e.message === "missing_lark_token") return res.status(500).json({ error: e.message });

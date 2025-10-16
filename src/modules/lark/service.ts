@@ -115,3 +115,29 @@ export async function batchUpdateRecords(opts: BatchUpdateOpts) {
 
   return resp.data;
 }
+
+export type SearchOpts = {
+  appId: string;
+  tableId: string;
+  pageSize?: number;
+  body: any; // search payload (filter, field_names, view_id, etc.)
+  token?: string;
+};
+
+export async function searchRecords(opts: SearchOpts) {
+  const base = env.larkBase ?? "https://open.larksuite.com";
+  const token = opts.token ?? await getAppToken();
+  if (!token) throw new Error("missing_lark_token");
+
+  const url = `${base}/open-apis/bitable/v1/apps/${encodeURIComponent(opts.appId)}/tables/${encodeURIComponent(opts.tableId)}/records/search`;
+  const params: Record<string, any> = {};
+  if (opts.pageSize) params.page_size = opts.pageSize;
+
+  const resp = await axios.post(url, opts.body, {
+    params,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    timeout: 15000,
+  });
+
+  return resp.data;
+}
