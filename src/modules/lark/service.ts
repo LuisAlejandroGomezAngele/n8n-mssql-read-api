@@ -1,5 +1,6 @@
 import axios from "axios";
 import { env } from "../../config/env";
+import { listResource } from "../../modules/common/repo";
 
 export type LarkFieldsOpts = {
   appId: string;
@@ -19,6 +20,15 @@ type Session = {
 // In-memory session cache (no file storage)
 let memorySession: Session | null = null;
 
+export function getSessionSummary() {
+  if (!memorySession) return null;
+  return {
+    has_app_access_token: !!memorySession.app_access_token,
+    has_tenant_access_token: !!memorySession.tenant_access_token,
+    expire: memorySession.expire,
+  };
+}
+
 async function authenticateApp(): Promise<Session> {
   const base = env.larkBase ?? "https://open.larksuite.com";
   const target = `${base}/open-apis/auth/v3/app_access_token/internal`;
@@ -37,6 +47,16 @@ async function authenticateApp(): Promise<Session> {
     expire: now + expire,
   };
   memorySession = sess;
+  // Debug: log that authentication succeeded and which tokens are present (do NOT print full tokens)
+  try {
+    console.info("Lark authenticate: got tokens present:", {
+      has_app_access_token: !!sess.app_access_token,
+      has_tenant_access_token: !!sess.tenant_access_token,
+      expire_at: sess.expire,
+    });
+  } catch (e) {
+    // ignore logging errors
+  }
   return sess;
 }
 
@@ -140,4 +160,87 @@ export async function searchRecords(opts: SearchOpts) {
   });
 
   return resp.data;
+}
+
+export type SyncResult = {
+  created: number;
+  updated: number;
+  errors: Array<{ productId: string | number; error: any }>;
+};
+
+export async function syncProductsToBitable(opts: { appId: string; tableId: string; viewId?: string; pageSize?: number; dbPageSize?: number; }) : Promise<SyncResult> {
+  const { appId, tableId, viewId, pageSize = 20, dbPageSize = 100 } = opts;
+  const res: SyncResult = { created: 0, updated: 0, errors: [] };
+
+  let page = 1;
+  while (true) {
+    let data: any;
+    try {
+      data = await listResource("productos", { page, size: dbPageSize });
+    } catch (err:any) {
+      console.error("Error reading resource 'productos' page", page, String(err));
+      throw err;
+    }
+    const items: any[] = data.items ?? [];
+    console.log(items)
+    if (!items.length) break;
+    for (const item of items) {
+      try {
+        const pid = item.productId ?? item.product_id ?? item.productid ?? null;
+        if (pid == null) continue;
+
+        const payload: any = {
+          automatic_fields: false,
+          field_names: ["productId"],
+          filter: {
+            children: [
+              {
+                conditions: [
+                  { field_name: "productId", operator: "is", value: [String(pid)] }
+                ],
+                conjunction: "or"
+              }
+            ],
+            conjunction: "and"
+          }
+        };
+        if (viewId) payload.view_id = viewId;
+
+        const searchResp: any = await searchRecords({ appId, tableId, pageSize, body: payload });
+
+        // try multiple possible response shapes to find records
+        let foundRecords: any[] = [];
+        if (Array.isArray(searchResp?.records)) foundRecords = searchResp.records;
+        else if (Array.isArray(searchResp?.data?.records)) foundRecords = searchResp.data.records;
+        else if (Array.isArray(searchResp?.items)) foundRecords = searchResp.items;
+        else if (Array.isArray(searchResp?.data?.items)) foundRecords = searchResp.data.items;
+
+        if (foundRecords.length) {
+          const recordId = foundRecords[0].record_id ?? foundRecords[0].recordId ?? foundRecords[0].id ?? foundRecords[0].record_id;
+          if (!recordId) {
+            // cannot update without record id; skip
+            res.errors.push({ productId: pid, error: "no_record_id_found" });
+            continue;
+          }
+          const upd = [{ record_id: recordId, fields: item }];
+          await batchUpdateRecords({ appId, tableId, records: upd });
+          res.updated++;
+        } else {
+          const crt = [{ fields: item }];
+          await batchCreateRecords({ appId, tableId, records: crt });
+          res.created++;
+        }
+      } catch (e: any) {
+        const errInfo = e?.response?.data ?? e.message ?? e;
+        res.errors.push({ productId: item?.productId ?? null, error: errInfo });
+        // Log full error server-side for debugging (include stack if available)
+        console.error("syncProductsToBitable error for product", item?.productId ?? item, errInfo, e.stack ?? "no-stack");
+      }
+    }
+
+    if (items.length < dbPageSize) break;
+    page++;
+  }
+
+  return res;
 }

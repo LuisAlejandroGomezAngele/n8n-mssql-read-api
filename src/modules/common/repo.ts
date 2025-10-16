@@ -70,18 +70,40 @@ export async function listResource(
   }
 
   const whereSql = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
-  const orderSql = sortCol ? `ORDER BY ${quoteId(sortCol)} ${dir}` : "";
+  let orderSql = "";
+  if (sortCol) {
+    orderSql = `ORDER BY ${quoteId(sortCol)} ${dir}`;
+  } else {
+    // OFFSET ... FETCH requires ORDER BY in SQL Server. If resource defines a pk, use it.
+    // Otherwise use a neutral ORDER BY to satisfy syntax.
+    if (cfg.pk) {
+      orderSql = `ORDER BY ${quoteId(cfg.pk)} ${dir}`;
+    } else {
+      orderSql = `ORDER BY (SELECT NULL)`; // neutral order to allow OFFSET/FETCH
+    }
+  }
   const view = cfg.view;
 
-  const items = await sequelize.query(
-    `SELECT * FROM ${quoteId(view)} ${whereSql} ${orderSql} OFFSET :off ROWS FETCH NEXT :sz ROWS ONLY`,
-    { replacements: { ...repl, off, sz: size }, type: QueryTypes.SELECT }
-  );
+  const sqlItems = `SELECT * FROM ${quoteId(view)} ${whereSql} ${orderSql} OFFSET :off ROWS FETCH NEXT :sz ROWS ONLY`;
+  const replItems = { ...repl, off, sz: size };
+  let items;
+  try {
+    items = await sequelize.query(sqlItems, { replacements: replItems, type: QueryTypes.SELECT });
+  } catch (err:any) {
+    console.error("Sequelize query error executing items SQL:", sqlItems, "replacements:", replItems, "error:", err.message ?? err);
+    // Re-throw to preserve behavior but include SQL context
+    throw new Error(`SequelizeDatabaseError executing items SQL: ${String(err.message ?? err)}`);
+  }
 
-  const totalRow = await sequelize.query<{ cnt: number }>(
-    `SELECT COUNT(1) AS cnt FROM ${quoteId(view)} ${whereSql}`,
-    { replacements: repl, type: QueryTypes.SELECT }
-  );
+  const sqlCount = `SELECT COUNT(1) AS cnt FROM ${quoteId(view)} ${whereSql}`;
+  const replCount = repl;
+  let totalRow;
+  try {
+    totalRow = await sequelize.query<{ cnt: number }>(sqlCount, { replacements: replCount, type: QueryTypes.SELECT });
+  } catch (err:any) {
+    console.error("Sequelize query error executing count SQL:", sqlCount, "replacements:", replCount, "error:", err.message ?? err);
+    throw new Error(`SequelizeDatabaseError executing count SQL: ${String(err.message ?? err)}`);
+  }
   const total = Number((totalRow[0] as any)?.cnt ?? 0);
 
   return { items, page, size, total };

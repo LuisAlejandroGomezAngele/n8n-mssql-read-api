@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getLarkFields, batchCreateRecords, batchUpdateRecords, searchRecords } from "./service";
+import { syncProductsToBitable, getSessionSummary } from "./service";
 
 const r = Router();
 
@@ -127,6 +128,79 @@ r.post("/records/search", async (req, res) => {
     const status = e.response?.status ?? 500;
     const body = e.response?.data ?? { message: e.message };
     res.status(status).json({ error: body });
+  }
+});
+
+/**
+ * POST /v1/lark/sync/products
+ * Body: { appId, tableId, viewId?, dbPageSize?, pageSize? }
+ */
+r.post("/sync/products", async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const appId = String(body.appId ?? "").trim();
+    const tableId = String(body.tableId ?? "").trim();
+    const viewId = body.viewId ? String(body.viewId) : undefined;
+    const dbPageSize = body.dbPageSize ? Number(body.dbPageSize) : undefined;
+    const pageSize = body.pageSize ? Number(body.pageSize) : undefined;
+    if (!appId || !tableId) return res.status(400).json({ error: "invalid_payload" });
+
+    const result = await syncProductsToBitable({ appId, tableId, viewId, dbPageSize, pageSize });
+    res.json({ data: result });
+  } catch (e: any) {
+    const status = e.response?.status ?? 500;
+    const body = e.response?.data ?? { message: e.message };
+    res.status(status).json({ error: body });
+  }
+});
+
+// Convenience endpoints for chunk sizes
+r.post("/sync/products/50", async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const appId = String(body.appId ?? "").trim();
+    const tableId = String(body.tableId ?? "").trim();
+    const viewId = body.viewId ? String(body.viewId) : undefined;
+    const pageSize = body.pageSize ? Number(body.pageSize) : undefined;
+    if (!appId || !tableId) return res.status(400).json({ error: "invalid_payload" });
+
+    const result = await syncProductsToBitable({ appId, tableId, viewId, dbPageSize: 50, pageSize });
+    res.json({ data: result });
+  } catch (e: any) {
+    const status = e.response?.status ?? 500;
+    const body = e.response?.data ?? { message: e.message };
+    res.status(status).json({ error: body });
+  }
+});
+
+r.post("/sync/products/100", async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const appId = String(body.appId ?? "").trim();
+    const tableId = String(body.tableId ?? "").trim();
+    const viewId = body.viewId ? String(body.viewId) : undefined;
+    const pageSize = body.pageSize ? Number(body.pageSize) : undefined;
+    if (!appId || !tableId) return res.status(400).json({ error: "invalid_payload" });
+
+    const result = await syncProductsToBitable({ appId, tableId, viewId, dbPageSize: 100, pageSize });
+    res.json({ data: result });
+  } catch (e: any) {
+    const status = e.response?.status ?? 500;
+    const body = e.response?.data ?? { message: e.message };
+    res.status(status).json({ error: body });
+  }
+});
+
+/**
+ * GET /v1/lark/debug/session
+ * Returns a debug-safe summary of in-memory session (no tokens)
+ */
+r.get("/debug/session", async (_req, res) => {
+  try {
+    const mem = getSessionSummary();
+    return res.json({ ok: true, session: mem });
+  } catch (e:any) {
+    res.status(500).json({ error: String(e) });
   }
 });
 
