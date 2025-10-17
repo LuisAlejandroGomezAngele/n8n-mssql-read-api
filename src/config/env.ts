@@ -18,4 +18,8 @@ export const env = {
   larkAppId: process.env.LARK_APP_ID,
   larkAppSecret: process.env.LARK_APP_SECRET,
   // Note: token caching is done in memory by the service (no file storage)
+  // Scheduler
+  scheduleEnabled: process.env.SCHEDULE_LARK_SYNC_ENABLED === "true",
+  scheduleCron: process.env.SCHEDULE_LARK_SYNC_CRON ?? "0 6 * * *",
+  larkTableId: process.env.LARK_TABLE_ID,
 };
